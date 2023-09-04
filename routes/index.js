@@ -16,8 +16,8 @@ router.get("/", (req, res) => {
 
 router.post("/signup", (req, res) => {
   const { fullName, email, password } = req.body;
-  if (!password || !fullName | !email) {
-    return res.status(206).send("Please add all feilds");
+  if (!password || !fullName || !email) {
+    return res.status(206).send("Please add all fields");
   }
 
   const authModel = new AuthModel({
@@ -25,73 +25,89 @@ router.post("/signup", (req, res) => {
     email,
     password,
   });
+
   AuthModel.findOne({ email: email }).then((savedUser) => {
     if (savedUser) {
-      return res.status(206).send("email already present try new email");
+      return res.status(206).send("Email already present, try a new email");
     }
     if (!savedUser) {
-      authModel
-        .save()
-        .then(() => {
-          return res.send("Auth Model Saved in mongodb");
-        })
-        .catch((err) => {
-          return res.send("Auth Model isnt saved in mongodb");
+      // Adding a try-catch block here to handle potential errors during save
+      try {
+        authModel.save().then(() => {
+          return res.send("Auth Model Saved in MongoDB");
         });
+      } catch (err) {
+        return res.status(500).send("Error: Auth Model couldn't be saved in MongoDB");
+      }
     }
   });
 });
-router.post("/signin", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(206).send({
-      message: "A feild is missing try again",
-    });
-  }
 
-  const response = await AuthModel.findOne({ email: email });
-  if (response) {
-    const getPassword = await AuthModel.findOne({ password: password });
-    if (getPassword) {
-      const token = jwt.sign({ id: response.id }, MONGO_URL_NAME);
-      const { _id, email, fullName } = response;
-      if (token) {
-        return res.status(200).send({
-          message: "User SignIn SuccessFully",
-          token: token,
-        });
-      }
+router.post("/signin", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
       return res.status(206).send({
-        message: `Sign In succesfull , ${token}`,
+        message: "A field is missing, please try again",
       });
     }
-    return res.send({
-      message: "Email or password is wrong",
-    });
-  }
-  if (!response) {
-    return res.status(206).send({
-      message: "Email not found please signup first",
+
+    const response = await AuthModel.findOne({ email: email });
+    if (response) {
+      const getPassword = await AuthModel.findOne({ password: password });
+      if (getPassword) {
+        const token = jwt.sign({ id: response.id }, MONGO_URL_NAME);
+        const { _id, email, fullName } = response;
+        if (token) {
+          return res.status(200).send({
+            message: "User SignIn Successfully",
+            token: token,
+          });
+        }
+        return res.status(206).send({
+          message: `Sign In successful, ${token}`,
+        });
+      }
+      return res.send({
+        message: "Email or password is wrong",
+      });
+    }
+    if (!response) {
+      return res.status(206).send({
+        message: "Email not found, please sign up first",
+      });
+    }
+  } catch (error) {
+    return res.status(500).send({
+      message: "An error occurred during sign-in",
+      error: error.message,
     });
   }
 });
 
 router.post("/image/generator", async (req, res) => {
-  const parsed = JSON.parse(req.body.input);
-  const { inputVal, getSelectState } = parsed;
-  console.log(getSelectState);
-  console.log(inputVal);
-  const configuration = new Configuration({
-    apiKey: OPENAI_API_KEY,
-  });
+  try {
+    const parsed = JSON.parse(req.body.input);
+    const { inputVal, getSelectState } = parsed;
+    console.log(getSelectState);
+    console.log(inputVal);
+    const configuration = new Configuration({
+      apiKey: OPENAI_API_KEY,
+    });
 
-  const openai = new OpenAIApi(configuration);
-  const response = await openai.createImage({
-    prompt: inputVal, //Text Prompt
-    n: 4,
-    size: getSelectState ? getSelectState : "256x256",
-  });
-  res.status(200).json({ result: response.data.data }); //200 means okay
+    const openai = new OpenAIApi(configuration);
+    const response = await openai.createImage({
+      prompt: inputVal, //Text Prompt
+      n: 4,
+      size: getSelectState ? getSelectState : "256x256",
+    });
+    res.status(200).json({ result: response.data.data }); //200 means okay
+  } catch (error) {
+    return res.status(500).json({
+      error: "An error occurred while generating the image",
+      message: error.message,
+    });
+  }
 });
 
 //Image Collection Api Creation
